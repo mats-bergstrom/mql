@@ -8,8 +8,8 @@
  * Created On      : Sun Jun 29 10:59:37 2025
  * 
  * Last Modified By: Mats Bergstrom
- * Last Modified On: Mon Nov 17 17:38:48 2025
- * Update Count    : 18
+ * Last Modified On: Tue Nov 18 18:00:16 2025
+ * Update Count    : 21
  */
 
 #ifndef __MQL_H__
@@ -73,7 +73,8 @@
 //	id		Id string of calling process
 //	lvl		Start log level.
 //	RETURNS	0	OK
-//		-1	Error	
+//		-1	Error
+// Call after mosquitto_new() and before mosquitto_connect().
 int mql_init(struct mosquitto* mqc,
 	     const char* prefix, const char* id, unsigned lvl);
 
@@ -104,5 +105,18 @@ int mql_set_level(unsigned severity);
 
 // Set maximum severity level to emit for count emissions
 int mql_set_level_counted(unsigned severity, unsigned count);
+
+
+/* Help Functions */
+typedef struct {
+    const char* ptr;
+    size_t	len;
+} mql_fragment_t;
+
+/* Fills in the frag_array to point to start of each fragment and length */
+/* of each fragment. */
+/* Returns -1 for error, or number of fragments decoded */
+int mql_split(const char* topic,
+	      mql_fragment_t* frag_array, size_t frag_array_len );
 
 #endif

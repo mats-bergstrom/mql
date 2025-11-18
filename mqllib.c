@@ -8,8 +8,8 @@
  * Created On      : Thu Jul  3 21:27:06 2025
  * 
  * Last Modified By: Mats Bergstrom
- * Last Modified On: Mon Nov 17 17:39:30 2025
- * Update Count    : 36
+ * Last Modified On: Tue Nov 18 18:46:44 2025
+ * Update Count    : 44
  */
 
 
@@ -60,6 +60,8 @@ mql_init(struct mosquitto* mqc,
     if ( !*id ) abort();
     if ( lvl >= MQL_S_MAX ) abort();
 
+    DD("prefix=\"%s\" id=\"%s\" lvl=%d\n", prefix,id,lvl);
+    
     mql_mqc = mqc;
     
     strncpy( mql_prefix, prefix, MQL_PREFIX_MAX_LEN-1);
@@ -69,16 +71,18 @@ mql_init(struct mosquitto* mqc,
 	i = snprintf( mql_log_topic[l], MQL_TOPIC_MAX_LEN,
 		      "%s/%s/%x", mql_prefix, mql_id, l );
 	if ( !(i<MQL_TOPIC_MAX_LEN) ) abort();
-	
+	DD(".. log_topic[%x]=\"%s\"\n",l,mql_log_topic[l]);
     }
 
     i = snprintf( mql_cmd_topic, MQL_TOPIC_MAX_LEN,
 		  "%s/%s/control", mql_prefix, mql_id);
     if ( !(i<MQL_TOPIC_MAX_LEN) ) abort();
+    DD(".. cmd_topic=\"%s\"\n",mql_cmd_topic);
 
     i = snprintf( mql_cmd_topic_all, MQL_TOPIC_MAX_LEN,
 		  "%s/ALL/control", mql_prefix);
     if ( !(i<MQL_TOPIC_MAX_LEN) ) abort();
+    DD(".. cmd_topic_all=\"%s\"\n",mql_cmd_topic_all);
 
     mql_level = lvl;
     mql_clevel = lvl;
@@ -117,6 +121,11 @@ mql_decode_lvl(const char* s, unsigned* lvl_ptr )
 	}
 	else if ( ('a' <= *s) && (*s <= 'f') ) {
 	    lvl = (*s - 'a') + 0x0a;
+	    ++s;
+	    ++n;
+	}
+	else if ( ('A' <= *s) && (*s <= 'F') ) {
+	    lvl = (*s - 'A') + 0x0a;
 	    ++s;
 	    ++n;
 	}
@@ -173,6 +182,7 @@ mql_do_command(const char* cmd)
 	unsigned lvl = 0;
 	++cmd;
 	l = mql_decode_lvl(cmd,&lvl);
+	DD ("New level = %d was %d, l = %d\n",lvl, mql_level,l);
 	if ( l > 0 ) {
 	    mql_level = lvl;
 	    l = 1;
@@ -255,7 +265,8 @@ mql_log(unsigned severity, const char* string)
     int n = 0;
     int status;
     const char* topic;
-    
+
+    DD("mql_log(%x/%x,\"%s\")\n",severity,mql_level,string);
     if ( !mql_mqc ) abort();
 
     if ( mql_count ) {
@@ -302,4 +313,46 @@ mql_logf(unsigned severity, const char* format, ... )
 	mql_log(severity,mql_buffer);
 
     return 0;
+}
+
+
+int
+mql_split(const char* topic, 
+	      mql_fragment_t* frag_array, size_t frag_array_len )
+{
+    size_t fragments = 0;
+    const char* p = topic;
+    const char* ptr=topic;
+    size_t	len=0;
+    if ( !topic || !frag_array || !frag_array_len ) return -1;
+    for(;;) {
+	if ( !*p ) {
+	    /* at end of topic */
+	    if ( fragments < frag_array_len ) {
+		frag_array[ fragments ].ptr = ptr;
+		frag_array[ fragments ].len = len;
+		++fragments;
+	    }
+	    break;
+	}
+	if ( *p == '/' ) {
+	    if ( fragments < frag_array_len ) {
+		frag_array[ fragments ].ptr = ptr;
+		frag_array[ fragments ].len = len;
+		++fragments;
+
+		++p;
+		ptr = p;
+		len = 0;
+	    }
+	    else {
+		break;
+	    }
+	}
+	else {
+	    ++p;
+	    ++len;
+	}
+    }
+    return fragments;
 }

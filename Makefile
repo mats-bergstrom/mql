@@ -9,8 +9,8 @@
 ## Created On      : Fri Jul  4 19:59:06 2025
 ## 
 ## Last Modified By: Mats Bergstrom
-## Last Modified On: Sun Nov 16 15:29:12 2025
-## Update Count    : 14
+## Last Modified On: Mon Nov 17 22:03:00 2025
+## Update Count    : 15
 ###############################################################################
 
 CC		= gcc
@@ -31,12 +31,16 @@ INCFILES	= mql.h
 
 BINOBJ		= mql.o mql_listen.o
 
-all: mql libmql.a
+all: mql t-mql libmql.a
 
 mql: $(BINOBJ) libmql.a
 
+
 mql.o: mql.c mql.h
 mql_listen.o: mql_listen.c mql.h
+
+t-mql: t-mql.o libmql.a
+t-mql.o: t-mql.c mql.h
 
 libmql.a: mqllib.o
 	ar crv libmql.a mqllib.o

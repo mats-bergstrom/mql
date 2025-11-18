@@ -8,8 +8,8 @@
  * Created On      : Sun Jul  6 09:55:40 2025
  * 
  * Last Modified By: Mats Bergstrom
- * Last Modified On: Mon Nov 17 18:48:01 2025
- * Update Count    : 87
+ * Last Modified On: Tue Nov 18 18:51:50 2025
+ * Update Count    : 97
  */
 
 
@@ -32,8 +32,6 @@ struct mosquitto* mqc = 0;
 unsigned message_severity = MQL_S_MAX-1;
 char subscribe_topic[ MQL_STRING_MAX ];
 
-#define MQL_ID_MAX_LEN		(32)
-static char mql_id[ MQL_ID_MAX_LEN ];
 
 
 pthread_mutex_t	mtx;
@@ -41,82 +39,6 @@ pthread_cond_t	cv;
 bool connected = false;
 
 
-unsigned
-topic_severity(const char* s)
-/* <prefix> '/' <id> '/' <severity>  */
-/* Extract the severity from the topic string. One single hex digit */
-/* Returns severity or MQL_S_MAX to indicate error. */
-/* Puts <id> in mql_id[] */
-{
-    unsigned severity = MQL_S_MAX;	/*  */
-    const char* p = 0;
-    char* q = mql_id;
-    unsigned n = 0;
-
-    *q = '\0';
-
-    do {
-	/* Jump over first '/' */
-	while ( s && *s && !p ) {
-	    if ( *s == '/' )
-		p = s;
-	    ++s;
-	}
-
-	/* Step to next '/' and copy to mql_id[] */
-	while ( s && *s ) {
-	    if ( *s == '/' ) {
-		p = s;
-		++s;
-		break;
-	    }
-	    if ( n < (MQL_ID_MAX_LEN-1) ) {
-		*q = *s;
-		++s;
-		++q;
-		*q = '\0';
-		++n;
-	    }
-	    else {
-		/* Too long id, ignore end of it */
-		++s;
-	    }
-	}
-	
-
-	if ( !p )
-	    break;			/* No '/' found : Error */
-
-	if ( !n )			/* No id found : Error */
-	    break;
-	
-	++p;				/* Jump over '/' */
-	if ( !*p )
-	    break;
-
-	/* Translate one single hex digit */
-	if ( ('0' <= *p) && (*p <= '9') ) {
-	    severity = *p - '0';
-	}
-	else if ( ('a' <= *p) && (*p <= 'f') ) {
-	    severity = *p - 'a' + 10;
-	}
-	else if ( ('A' <= *p) && (*p <= 'F') ) {
-	    severity = *p - 'A' + 10;
-	}
-	else {
-	    /* Not a hex digit : Error */
-	    break;
-	}
-
-	/* Not the last character :  Error */
-	++p;
-	if ( *p )
-	    severity = MQL_S_MAX;
-    } while(0);
-
-    return severity;
-}
 
 static const char* mql_sev_name[MQL_S_MAX] = {
     "FATAL",
@@ -151,27 +73,71 @@ ends_in(const char* topic, const char* end)
     
 }
 
+unsigned decode_hexdigit(const char* p, size_t len)
+{
+    unsigned val = ~0U;
+    if ( p && (len == 1) ) {
+	/* Translate one single hex digit */
+	if ( ('0' <= *p) && (*p <= '9') ) {
+	    val = *p - '0';
+	}
+	else if ( ('a' <= *p) && (*p <= 'f') ) {
+	    val = *p - 'a' + 10;
+	}
+	else if ( ('A' <= *p) && (*p <= 'F') ) {
+	    val = *p - 'A' + 10;
+	}
+    }
+    return val;
+}
 
+
+#define N_FRAG (8)
 void
 mql_listen_message_callback(struct mosquitto *pmqc, void *obj,
 		    const struct mosquitto_message *msg)
 {
     const char*	topic = msg->topic;
     const char*	pload = msg->payload;
-    unsigned	tsev = topic_severity(topic);
+    mql_fragment_t frag[N_FRAG];
+    char mql_id[ MQL_ID_MAX_LEN + 1];
+    size_t mql_id_len = MQL_ID_MAX_LEN;
+    int n;
+    unsigned tsev;
 
     DD ("%s: \"%s\"\n",__func__, "called");
 
+    n = mql_split(topic,frag,N_FRAG);
+
+    /* Ignore control messages */
+    if ( (n == 3) &&
+	 (frag[2].len == 7) &&
+	 !strncmp("control",frag[2].ptr,7) )
+	return;
+
+    
+    if ( n != 3 || frag[2].len != 1 || !frag[1].len ) {
+	printf("Error: Malformed topic: \"%s\"! fragments=%d\n\n",topic,n);
+	return;
+    }
+
+
+    /* Extract the id and put in a buffer for easy print later. */
+    if ( frag[1].len < mql_id_len )
+	mql_id_len = frag[1].len;
+    strncpy(mql_id,frag[1].ptr,mql_id_len);
+    mql_id[ mql_id_len ] = '\0';
+
+    /* Get severity */
+    tsev = decode_hexdigit(frag[2].ptr,frag[2].len);
+
     if ( tsev >= MQL_S_MAX ) {
-
-	if ( ends_in(topic,"control") ) return;
-
 	printf("Error: Malformed topic: \"%s\"!\n\n",topic);
 	return;
     }
 
     if ( tsev <= message_severity )
-	printf("%-16s : %u : %-9s : \"%s\"\n",
+	printf("%-16s : %x : %-9s : \"%s\"\n",
 	       mql_id, tsev, mql_sev_name[tsev],pload);
 }
 
@@ -384,7 +350,7 @@ mql_command_level(const char* host, int port,
 				   lval,
 				   val,
 				   0,
-				   true ); /* retain is ON */
+				   false ); /* retain is ON */
 	if ( status != MOSQ_ERR_SUCCESS ) {
 	    printf("mosquitto_publish FAILED: %d\n",status);
 	    exit( EXIT_FAILURE );
