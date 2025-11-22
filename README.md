@@ -21,13 +21,13 @@ https://mosquitto.org/documentation/.
 
 **Implemented**
 
-Sending log messages.
+`libmql.a` Library to send log messages.
 
-`mql` program to receive log messages.
+`mql listen` program to receive log messages.
 
-`mql` program to set log severity level.
+`mql level` program to set log severity level.
 
-`mql` program to set log severity level for a finite number of sent messages.
+`mql count` program to set log severity level for a finite number of sent messages.
 
 
 **Planned**
@@ -40,23 +40,26 @@ Define command/response scheme.
 # Actors
 ## Standard
 
-MQTT Broker		The MQTT Broker/Server, the basis for the communication.
-
-			Any standard mossquitto broker should do.
+**MQTT Broker** The MQTT Broker/Server, the basis for the communication. 
+Any standard mossquitto broker should do, but only mosquitto tested.
 
 
 ## Logging
 
-MQL Source		An MQTT Client using the MQL for logging.
+**MQL Source**
+An MQTT Client using the MQL for logging.
 
-MQL Receiver		An MQTT Client receiving MQL Log messages from log sources.
-
-
+**MQL Receiver**
+An MQTT Client receiving MQL Log messages from log sources.
 
 ## Control
 
-MQL Target		An MQTT Client accepting MQL commands
+**MQL Target**
+An MQTT Client accepting MQL commands
 
-MQL Commander	An MQTT Client sending MQL commands to MQL Targets.
+**MQL Commander**
+An MQTT Client sending MQL commands to MQL Targets.
+
+
 
 
