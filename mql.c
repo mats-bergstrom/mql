@@ -8,8 +8,8 @@
  * Created On      : Thu Jul  3 21:27:06 2025
  * 
  * Last Modified By: Mats Bergstrom
- * Last Modified On: Mon Nov 17 18:38:59 2025
- * Update Count    : 59
+ * Last Modified On: Sat Nov 22 17:53:27 2025
+ * Update Count    : 65
  */
 
 
@@ -144,6 +144,10 @@ do_help(const char* msg)
 "	listen	<target> <severity>\n"
 "		<target>	ALL or name of target\n"
 "		<severity>	[FEWID] or [0-9,a-f] or ALL\n"
+"	count	<target> <severity> <count>\n"
+"		<target>	ALL or name of target\n"
+"		<severity>	[FEWID] or [0-9,a-f] or ALL\n"
+"		<count>		No of messages to use severity for\n"
 	   );
     exit(0);
 }
@@ -155,7 +159,7 @@ void mql_command_listen(const char* host, int port,
 void
 do_listen( int argc, const char** argv )
 /* listen [(target|ALL) [severity]]  */
-/* topics: <prefix>/<target>/<severity> */
+/* topics: <prefix>/log/<target>/<severity> */
 {
     const char* target_str = 0;
     const char* severity_str = 0;
@@ -184,12 +188,12 @@ do_listen( int argc, const char** argv )
     if ( !target_str || !*target_str ||
 	 !strcmp("ALL",target_str) || !strcmp("*",target_str) ) {
 	i = snprintf(mql_topic,MQL_TOPIC_MAX_LEN,
-		     "%s/#",mql_prefix);
+		     "%s/%s/#", mql_prefix, MQL_LOG_TAG);
 	if ( !(i<MQL_TOPIC_MAX_LEN) ) abort();
     }
     else {
 	i = snprintf(mql_topic,MQL_TOPIC_MAX_LEN,
-		    "%s/%s/#",mql_prefix,target_str);
+		     "%s/%s/%s/#", mql_prefix, MQL_LOG_TAG, target_str);
 	if ( !(i<MQL_TOPIC_MAX_LEN) ) abort();
     }
     
@@ -201,6 +205,7 @@ do_listen( int argc, const char** argv )
 void
 mql_command_level(const char* host, int port,
 		  const char* topic, unsigned severity);
+
 
 void
 do_level( int argc, const char** argv )
@@ -230,20 +235,87 @@ do_level( int argc, const char** argv )
     DD ("host=\"%s\" port=%d\n",mqtt_host, mqtt_port );
     DD ("target=\"%s\" severity=%u\n", (target_str?target_str:"ALL"), severity);
 
-    /* topic: <prefix> '/' <target> '/' 'control' */
-    if ( !target_str || !*target_str ||
-	 !strcmp("ALL",target_str) || !strcmp("*",target_str) ) {
+    // topic: <prefix> '/' cmd '/' <target>
+    if ( !target_str ||
+	 !*target_str ||
+	 !strcmp("ALL",target_str)
+	 || !strcmp("*",target_str) ) {
 	i = snprintf(mql_topic,MQL_TOPIC_MAX_LEN,
-		     "%s/%s/control",mql_prefix,"ALL");
+		     "%s/%s/%s",mql_prefix, MQL_CMD_TAG, "ALL");
 	if ( !(i<MQL_TOPIC_MAX_LEN) ) abort();
     }
     else {
 	i = snprintf(mql_topic,MQL_TOPIC_MAX_LEN,
-		     "%s/%s/control",mql_prefix,target_str);
+		     "%s/%s/%s",mql_prefix, MQL_CMD_TAG, target_str);
 	if ( !(i<MQL_TOPIC_MAX_LEN) ) abort();
     }
 
     mql_command_level(mqtt_host,mqtt_port,mql_topic,severity);
+
+}
+
+
+void
+mql_command_count(const char* host, int port,
+		  const char* topic, unsigned severity, unsigned count);
+
+void
+do_count( int argc, const char** argv )
+/* count (target|ALL) severity count */
+{
+    const char* target_str = 0;
+    const char* severity_str = 0;
+    const char* count_str = 0;
+    unsigned severity = MQL_S_MAX-1;
+    unsigned long count = 1;
+    int i;
+
+    if ( argc ) {
+	target_str = *argv;
+	--argc;
+	++argv;
+	if ( argc ) {
+	    severity_str = *argv;
+	    --argc;
+	    ++argv;
+
+	    severity = set_severity(severity_str);
+
+	    if ( argc ) {
+		count_str = *argv;
+		--argc;
+		++argv;
+		
+		if ( argc )
+		    do_help("Too many arguments to count command.");
+
+		count = strtoul(count_str,0,0);
+	    }
+	}
+    }
+
+    DD ("host=\"%s\" port=%d\n",mqtt_host, mqtt_port );
+    DD ("target=\"%s\" severity=%u count=%lu\n",
+	(target_str?target_str:"ALL"), severity, count);
+
+    
+    
+    // topic: <prefix> '/' cmd '/' <target>
+    if ( !target_str ||
+	 !*target_str ||
+	 !strcmp("ALL",target_str)
+	 || !strcmp("*",target_str) ) {
+	i = snprintf(mql_topic,MQL_TOPIC_MAX_LEN,
+		     "%s/%s/%s",mql_prefix, MQL_CMD_TAG, "ALL");
+	if ( !(i<MQL_TOPIC_MAX_LEN) ) abort();
+    }
+    else {
+	i = snprintf(mql_topic,MQL_TOPIC_MAX_LEN,
+		     "%s/%s/%s",mql_prefix, MQL_CMD_TAG, target_str);
+	if ( !(i<MQL_TOPIC_MAX_LEN) ) abort();
+    }
+
+    mql_command_count(mqtt_host,mqtt_port,mql_topic,severity,count);
 
 }
 
@@ -331,6 +403,11 @@ main(int argc, const char** argv)
 	--argc;
 	++argv;
 	do_level(argc,argv);
+    }
+    else if ( !strcmp("count", *argv) ) {
+	--argc;
+	++argv;
+	do_count(argc,argv);
     }
     else if ( !strcmp("help", *argv) ) {
 	do_help(0);

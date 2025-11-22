@@ -8,8 +8,8 @@
  * Created On      : Mon Nov 17 21:36:21 2025
  * 
  * Last Modified By: Mats Bergstrom
- * Last Modified On: Mon Nov 17 22:20:39 2025
- * Update Count    : 18
+ * Last Modified On: Thu Nov 20 20:48:02 2025
+ * Update Count    : 20
  * Status          : $State$
  * 
  */
@@ -167,7 +167,7 @@ mq_message_callback(struct mosquitto *pmqc, void *obj,
 
     DD ("%s: \"%s\" \"%s\"\n",__func__, topic, pload );
 
-    i = mql_message_cb(msg);
+    i = mql_message_cb(pmqc,msg);
     if ( !i ) {
 	DD(".. Not MQL message\n");
     }
@@ -205,7 +205,7 @@ mq_connect_callback(struct mosquitto *mqc, void *obj, int result)
     DD ("%s: \n",__func__);
     /*     mql_sub("some/topic"); */
 
-    mql_connect_cb();
+    mql_connect_cb(mqc);
     
     /* Release main thread. */
     mq_set_connected( true );

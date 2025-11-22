@@ -8,8 +8,8 @@
  * Created On      : Sun Jul  6 09:55:40 2025
  * 
  * Last Modified By: Mats Bergstrom
- * Last Modified On: Tue Nov 18 18:51:50 2025
- * Update Count    : 97
+ * Last Modified On: Sat Nov 22 17:53:09 2025
+ * Update Count    : 105
  */
 
 
@@ -95,7 +95,7 @@ unsigned decode_hexdigit(const char* p, size_t len)
 #define N_FRAG (8)
 void
 mql_listen_message_callback(struct mosquitto *pmqc, void *obj,
-		    const struct mosquitto_message *msg)
+			    const struct mosquitto_message *msg)
 {
     const char*	topic = msg->topic;
     const char*	pload = msg->payload;
@@ -104,38 +104,44 @@ mql_listen_message_callback(struct mosquitto *pmqc, void *obj,
     size_t mql_id_len = MQL_ID_MAX_LEN;
     int n;
     unsigned tsev;
-
+    const size_t mql_cmd_tag_len = strlen(MQL_CMD_TAG);
+    const size_t mql_log_tag_len = strlen(MQL_LOG_TAG);
+    
     DD ("%s: \"%s\"\n",__func__, "called");
 
     n = mql_split(topic,frag,N_FRAG);
 
-    /* Ignore control messages */
+    // Ignore control messages: <prefix>/cmd/<id>
     if ( (n == 3) &&
-	 (frag[2].len == 7) &&
-	 !strncmp("control",frag[2].ptr,7) )
+	 (frag[1].len == mql_cmd_tag_len) &&
+	 strncmp(MQL_CMD_TAG, frag[1].ptr, mql_cmd_tag_len)  )
 	return;
 
-    
-    if ( n != 3 || frag[2].len != 1 || !frag[1].len ) {
+    // Log messages: <prefix>/log/<id>/<severity>
+    if ( n != 4					// Must be 4 fragments in topic
+	 || frag[1].len != mql_log_tag_len	// Must be a log tag
+	 || strncmp(MQL_LOG_TAG, frag[1].ptr, mql_log_tag_len)
+	 || frag[3].len != 1 ) {		// Severity must be 1 character
 	printf("Error: Malformed topic: \"%s\"! fragments=%d\n\n",topic,n);
 	return;
     }
 
 
     /* Extract the id and put in a buffer for easy print later. */
-    if ( frag[1].len < mql_id_len )
-	mql_id_len = frag[1].len;
-    strncpy(mql_id,frag[1].ptr,mql_id_len);
+    if ( frag[2].len < mql_id_len )
+	mql_id_len = frag[2].len;
+    strncpy(mql_id,frag[2].ptr,mql_id_len);
     mql_id[ mql_id_len ] = '\0';
 
     /* Get severity */
-    tsev = decode_hexdigit(frag[2].ptr,frag[2].len);
+    tsev = decode_hexdigit(frag[3].ptr,frag[3].len);
 
     if ( tsev >= MQL_S_MAX ) {
 	printf("Error: Malformed topic: \"%s\"!\n\n",topic);
 	return;
     }
 
+    // Only print if severity is below limit.
     if ( tsev <= message_severity )
 	printf("%-16s : %x : %-9s : \"%s\"\n",
 	       mql_id, tsev, mql_sev_name[tsev],pload);
@@ -227,7 +233,7 @@ mql_command_listen(const char* host, int port,
 	sleep(1);
     }
 }
-
+
 
 void
 set_connected( bool con )
@@ -329,7 +335,7 @@ mql_command_level(const char* host, int port,
 	exit( EXIT_FAILURE );
     }
 
-    for(;;) {
+    do {
 	int status;
 	char val[MQL_BUFFER_LEN+1];
 	int lval;
@@ -369,5 +375,123 @@ mql_command_level(const char* host, int port,
 	    perror("pthread_yield: ");
 
 	break;
+    } while(0);
+
+    // Do not wait for result.
+}
+
+void
+mql_count_connect_callback(struct mosquitto *mqc, void *obj, int result)
+{
+    DD ("%s: \"%s\"\n",__func__, subscribe_topic);
+    mql_sub(subscribe_topic);
+    set_connected(true);
+}
+
+
+void
+mql_count_disconnect_callback(struct mosquitto *mqc, void *obj, int result)
+{
+    printf("MQTT Disonnected: %d\n", result);
+    set_connected(false);
+}
+
+void
+mql_count_init(const char* host, int port )
+	/* Initialise the mosquitto lib */
+{
+    int i;
+    i = mosquitto_lib_init();
+    if ( i != MOSQ_ERR_SUCCESS) {
+	perror("mosquitto_lib_init: ");
+	exit( EXIT_FAILURE );
     }
+    
+    mqc = mosquitto_new(0, true, 0);
+    if ( !mqc ) {
+	perror("mosquitto_new: ");
+	exit( EXIT_FAILURE );
+    }
+
+    mosquitto_connect_callback_set(mqc, mql_count_connect_callback);
+    mosquitto_disconnect_callback_set(mqc, mql_count_disconnect_callback);
+
+    i = mosquitto_connect(mqc, host, port, 60);
+    if ( i != MOSQ_ERR_SUCCESS) {
+	perror("mosquitto_connect: ");
+	exit( EXIT_FAILURE );
+    }
+
+
+}
+
+void
+mql_command_count(const char* host, int port,
+		  const char* topic, unsigned severity, unsigned count)
+{
+    int i;
+    unsigned int n = 0;
+
+    pthread_mutex_init( &mtx, 0 );
+    pthread_cond_init( &cv, 0 );
+    connected = false;
+    
+    if ( !topic ) abort();
+    if ( !*topic ) abort();
+    
+    message_severity = severity;
+    strncpy(subscribe_topic,topic,MQL_STRING_MAX-1);
+    
+    mql_count_init(host,port);
+
+    i = mosquitto_loop_start(mqc);
+    if(i != MOSQ_ERR_SUCCESS){
+	mosquitto_destroy(mqc);
+	fprintf(stderr, "Error: %s\n", mosquitto_strerror(i));
+	exit( EXIT_FAILURE );
+    }
+
+    do {
+	int status;
+	char val[MQL_BUFFER_LEN+1];
+	int lval;
+
+	/* Do nothing, all happens in the mosquitto thread. */
+	if ( opt_d && (n < 5) )
+	    printf("loop: %d\n",n++);
+
+	wait_connected();
+
+	lval = snprintf(val, MQL_BUFFER_LEN, "C %x %u",severity,count);
+	if ( lval < 5 ) {
+	    printf("Bad message len, %d, expected 5 or more!\n",lval);
+	    exit( EXIT_FAILURE );
+	}
+	status = mosquitto_publish(mqc, 0,
+				   topic, 
+				   lval,
+				   val,
+				   0,
+				   false ); /* retain is ON */
+	if ( status != MOSQ_ERR_SUCCESS ) {
+	    printf("mosquitto_publish FAILED: %d\n",status);
+	    exit( EXIT_FAILURE );
+	}
+
+	i = pthread_yield();
+	if ( i )
+	    perror("pthread_yield: ");
+
+	i = pthread_yield();
+	if ( i )
+	    perror("pthread_yield: ");
+
+	i = pthread_yield();
+	if ( i )
+	    perror("pthread_yield: ");
+
+	break;
+    } while(0);
+
+    // Do not wait for result.
 }

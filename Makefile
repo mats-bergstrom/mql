@@ -9,8 +9,8 @@
 ## Created On      : Fri Jul  4 19:59:06 2025
 ## 
 ## Last Modified By: Mats Bergstrom
-## Last Modified On: Mon Nov 17 22:03:00 2025
-## Update Count    : 15
+## Last Modified On: Tue Nov 18 19:14:52 2025
+## Update Count    : 16
 ###############################################################################
 
 CC		= gcc
@@ -53,7 +53,7 @@ mqllib.o: mqllib.c mql.h
 
 
 clean:
-	rm -f *.o mql *~ *.log .*~ libmql.a
+	rm -f *.o mql t-mql *~ *.log .*~ libmql.a
 
 uninstall:
 	cd $(BINDIR); rm $(BINFILES)

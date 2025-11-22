@@ -8,8 +8,8 @@
  * Created On      : Sun Jun 29 10:59:37 2025
  * 
  * Last Modified By: Mats Bergstrom
- * Last Modified On: Tue Nov 18 18:00:16 2025
- * Update Count    : 21
+ * Last Modified On: Thu Nov 20 20:46:29 2025
+ * Update Count    : 23
  */
 
 #ifndef __MQL_H__
@@ -66,6 +66,10 @@
 #define MQL_TOPIC_MAX_LEN	(128)
 #define MQL_BUFFER_LEN		MQL_STRING_MAX
 
+#define MQL_LOG_TAG	"log"
+#define MQL_CMD_TAG	"cmd"
+#define MQL_RSP_TAG	"rsp"
+
 
 // Initialise
 //	mqc		mqtt handle
@@ -81,14 +85,14 @@ int mql_init(struct mosquitto* mqc,
 // Use in MQTT connect callback.  Call to subscribe to control topics.
 //	RETURNS	0	OK
 //		-1	Error
-int mql_connect_cb();
+int mql_connect_cb(struct mosquitto* mqc);
 
 // Use in MQTT message callback.
 //	msg		mqtt message 
 //	RETURNS	0	OK, was not mql related
 //		-1	Error.
 //		1	OK, was mql related.
-int mql_message_cb(const struct mosquitto_message *msg);
+int mql_message_cb(struct mosquitto* mqc,const struct mosquitto_message *msg);
 
 
 // Use to send log messages
@@ -107,15 +111,17 @@ int mql_set_level(unsigned severity);
 int mql_set_level_counted(unsigned severity, unsigned count);
 
 
-/* Help Functions */
+// Help Functions
+
+// Topic Fragments
 typedef struct {
     const char* ptr;
     size_t	len;
 } mql_fragment_t;
 
-/* Fills in the frag_array to point to start of each fragment and length */
-/* of each fragment. */
-/* Returns -1 for error, or number of fragments decoded */
+// Fills in the frag_array to point to start of each fragment and length
+// of each fragment.
+// Returns -1 for error, or number of fragments decoded
 int mql_split(const char* topic,
 	      mql_fragment_t* frag_array, size_t frag_array_len );
 

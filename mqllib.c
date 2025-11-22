@@ -8,8 +8,8 @@
  * Created On      : Thu Jul  3 21:27:06 2025
  * 
  * Last Modified By: Mats Bergstrom
- * Last Modified On: Tue Nov 18 18:46:44 2025
- * Update Count    : 44
+ * Last Modified On: Sat Nov 22 18:00:48 2025
+ * Update Count    : 55
  */
 
 
@@ -30,13 +30,18 @@
 #endif
 
 
+static const char mql_log_tag[] = MQL_LOG_TAG;
+static const char mql_cmd_tag[] = MQL_CMD_TAG;
+//static const char mql_rsp_tag[] = MQL_RSP_TAG;
 
 static char mql_prefix[ MQL_PREFIX_MAX_LEN ];
 static char mql_id[ MQL_ID_MAX_LEN ];
+static const char mql_id_ALL[] = "ALL";
 
 static char mql_log_topic[ MQL_S_MAX ][ MQL_TOPIC_MAX_LEN ];
 static char mql_cmd_topic[ MQL_TOPIC_MAX_LEN ];
 static char mql_cmd_topic_all[ MQL_TOPIC_MAX_LEN ];
+//static char mql_rsp_topic[ MQL_TOPIC_MAX_LEN ];
 
 static char mql_buffer[ MQL_BUFFER_LEN ];
 
@@ -67,20 +72,24 @@ mql_init(struct mosquitto* mqc,
     strncpy( mql_prefix, prefix, MQL_PREFIX_MAX_LEN-1);
     strncpy( mql_id, id, MQL_ID_MAX_LEN-1 );
 
+    // Log Topics: <prefix> '/' <log-tag> '/' <id> '/' <severity>
     for ( l = 0; l < MQL_S_MAX; ++l ) {
 	i = snprintf( mql_log_topic[l], MQL_TOPIC_MAX_LEN,
-		      "%s/%s/%x", mql_prefix, mql_id, l );
+		      "%s/%s/%s/%x", mql_prefix, mql_log_tag, mql_id, l );
+
 	if ( !(i<MQL_TOPIC_MAX_LEN) ) abort();
 	DD(".. log_topic[%x]=\"%s\"\n",l,mql_log_topic[l]);
     }
 
+    // Command Topics: <prefix> '/' <cmd-tag> '/' <id>
     i = snprintf( mql_cmd_topic, MQL_TOPIC_MAX_LEN,
-		  "%s/%s/control", mql_prefix, mql_id);
+		  "%s/%s/%s", mql_prefix, mql_cmd_tag, mql_id);
     if ( !(i<MQL_TOPIC_MAX_LEN) ) abort();
     DD(".. cmd_topic=\"%s\"\n",mql_cmd_topic);
 
+    // Broadcast Command Topics: <prefix> '/' <cmd-tag> '/' 'ALL'
     i = snprintf( mql_cmd_topic_all, MQL_TOPIC_MAX_LEN,
-		  "%s/ALL/control", mql_prefix);
+		  "%s/%s/%s", mql_prefix, mql_cmd_tag, mql_id_ALL );
     if ( !(i<MQL_TOPIC_MAX_LEN) ) abort();
     DD(".. cmd_topic_all=\"%s\"\n",mql_cmd_topic_all);
 
@@ -94,10 +103,10 @@ mql_init(struct mosquitto* mqc,
 
 // Use in MQTT connect callback.
 int
-mql_connect_cb()
+mql_connect_cb(struct mosquitto* mqc)
 {
-    mosquitto_subscribe(mql_mqc, NULL, mql_cmd_topic, 0);
-    mosquitto_subscribe(mql_mqc, NULL, mql_cmd_topic_all, 0);
+    mosquitto_subscribe(mqc, NULL, mql_cmd_topic, 0);
+    mosquitto_subscribe(mqc, NULL, mql_cmd_topic_all, 0);
     return 0;
 }
 
@@ -105,6 +114,8 @@ mql_connect_cb()
 #define MQL_LEVEL_COMMAND	'L'
 #define MQL_COUNT_COMMAND	'C'
 
+// Decode a single hex digit to a number.
+// Returns: 1 on success, 0 on failure. 
 static unsigned
 mql_decode_lvl(const char* s, unsigned* lvl_ptr )
 {
@@ -139,6 +150,8 @@ mql_decode_lvl(const char* s, unsigned* lvl_ptr )
 }
 
 
+// Decodes a decimal string to a number.
+// Return 0 on failure, >0 number of characters used.
 static unsigned
 mql_decode_count(const char* s, unsigned* count_ptr )
 {
@@ -173,11 +186,12 @@ mql_decode_count(const char* s, unsigned* count_ptr )
 }
 
 
+
 static int
-mql_do_command(const char* cmd)
+mql_do_command(struct mosquitto* mqc, const char* cmd)
 {
     unsigned l = 0;
-    DD ("Command \"%s\"",cmd);
+    DD ("Command \"%s\"\n",cmd);
     if ( *cmd == MQL_LEVEL_COMMAND ) {
 	unsigned lvl = 0;
 	++cmd;
@@ -199,6 +213,8 @@ mql_do_command(const char* cmd)
 	if ( l > 0 ) {
 	    cmd += l;
 	    l = mql_decode_count(cmd,&count);
+	    DD ("New clevel = %d / %d, count=%d, l = %d\n\n",
+		lvl, mql_level,count,l);
 	    if ( l > 0 ) {
 		mql_clevel = lvl;
 		mql_count = count;
@@ -218,7 +234,7 @@ mql_do_command(const char* cmd)
 
 // Use in MQTT message callback.
 int
-mql_message_cb(const struct mosquitto_message *msg)
+mql_message_cb(struct mosquitto* mqc,const struct mosquitto_message *msg)
 {
     int i = 0;
     const char*    topic = msg->topic;
@@ -226,7 +242,7 @@ mql_message_cb(const struct mosquitto_message *msg)
     if ( !mql_mqc ) abort();
     if ( !strncmp(topic,mql_cmd_topic,MQL_TOPIC_MAX_LEN) ||
 	 !strncmp(topic,mql_cmd_topic_all,MQL_TOPIC_MAX_LEN) ) {
-	i = mql_do_command(pload);
+	i = mql_do_command(mqc,pload);
     }
     return i;
 }
@@ -266,16 +282,17 @@ mql_log(unsigned severity, const char* string)
     int status;
     const char* topic;
 
-    DD("mql_log(%x/%x,\"%s\")\n",severity,mql_level,string);
+    DD("mql_log(%x/%x/%d(%u),\"%s\")\n",
+       severity,mql_level,mql_clevel,mql_count,string);
     if ( !mql_mqc ) abort();
 
     if ( mql_count ) {
 	if  (severity > mql_clevel)
 	    return 0;
-	--mql_count;
     }
-    if ( severity > mql_level )
+    else if ( severity > mql_level ) {
 	return 0;
+    }
 
     if ( !string )
 	return -1;
@@ -292,6 +309,10 @@ mql_log(unsigned severity, const char* string)
 			       string,
 			       0,
 			       false );			/* retain is OFF */
+
+    if ( mql_count )
+	--mql_count;
+    
     if ( status != MOSQ_ERR_SUCCESS )
 	return -1;
 
@@ -317,8 +338,7 @@ mql_logf(unsigned severity, const char* format, ... )
 
 
 int
-mql_split(const char* topic, 
-	      mql_fragment_t* frag_array, size_t frag_array_len )
+mql_split(const char* topic, mql_fragment_t* frag_array, size_t frag_array_len )
 {
     size_t fragments = 0;
     const char* p = topic;
