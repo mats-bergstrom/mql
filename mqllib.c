@@ -8,8 +8,8 @@
  * Created On      : Thu Jul  3 21:27:06 2025
  * 
  * Last Modified By: Mats Bergstrom
- * Last Modified On: Sat Nov 22 18:00:48 2025
- * Update Count    : 55
+ * Last Modified On: Sun Nov 23 17:15:08 2025
+ * Update Count    : 56
  */
 
 
@@ -338,12 +338,12 @@ mql_logf(unsigned severity, const char* format, ... )
 
 
 int
-mql_split(const char* topic, mql_fragment_t* frag_array, size_t frag_array_len )
+mql_split(const char* topic, mql_fragment_t* frag_array, unsigned frag_array_len )
 {
-    size_t fragments = 0;
+    unsigned fragments = 0;
     const char* p = topic;
     const char* ptr=topic;
-    size_t	len=0;
+    unsigned	len=0;
     if ( !topic || !frag_array || !frag_array_len ) return -1;
     for(;;) {
 	if ( !*p ) {

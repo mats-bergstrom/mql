@@ -8,11 +8,14 @@
  * Created On      : Thu Jul  3 21:27:06 2025
  * 
  * Last Modified By: Mats Bergstrom
- * Last Modified On: Sat Nov 22 17:53:27 2025
- * Update Count    : 65
+ * Last Modified On: Sun Nov 23 17:16:02 2025
+ * Update Count    : 68
  */
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "mql.h"
 
@@ -418,3 +421,7 @@ main(int argc, const char** argv)
 
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif

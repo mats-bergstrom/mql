@@ -8,12 +8,16 @@
  * Created On      : Sun Jun 29 10:59:37 2025
  * 
  * Last Modified By: Mats Bergstrom
- * Last Modified On: Thu Nov 20 20:46:29 2025
- * Update Count    : 23
+ * Last Modified On: Sun Nov 23 17:15:05 2025
+ * Update Count    : 25
  */
 
 #ifndef __MQL_H__
 #define __MQL_H__ (1)
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * Topics:
@@ -116,13 +120,17 @@ int mql_set_level_counted(unsigned severity, unsigned count);
 // Topic Fragments
 typedef struct {
     const char* ptr;
-    size_t	len;
+    unsigned	len;
 } mql_fragment_t;
 
 // Fills in the frag_array to point to start of each fragment and length
 // of each fragment.
 // Returns -1 for error, or number of fragments decoded
 int mql_split(const char* topic,
-	      mql_fragment_t* frag_array, size_t frag_array_len );
+	      mql_fragment_t* frag_array, unsigned frag_array_len );
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
