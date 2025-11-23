@@ -8,8 +8,8 @@
  * Created On      : Thu Jul  3 21:27:06 2025
  * 
  * Last Modified By: Mats Bergstrom
- * Last Modified On: Sun Nov 23 17:28:25 2025
- * Update Count    : 58
+ * Last Modified On: Sun Nov 23 17:36:45 2025
+ * Update Count    : 59
  */
 
 
@@ -23,7 +23,9 @@
 #include <string.h>
 #include <stdarg.h>
 
-#define DD if(0)printf
+static const int opt_dd = 0;
+
+#define DD if(opt_dd)printf
 
 #ifndef MQL_DEFAULT_LEVEL
 #define MQL_DEFAULT_LEVEL MQL_S_WARNING
