@@ -8,8 +8,8 @@
  * Created On      : Sun Jun 29 10:59:37 2025
  * 
  * Last Modified By: Mats Bergstrom
- * Last Modified On: Sun Nov 23 17:15:05 2025
- * Update Count    : 25
+ * Last Modified On: Sun Nov 23 17:26:59 2025
+ * Update Count    : 27
  */
 
 #ifndef __MQL_H__
@@ -113,6 +113,9 @@ int mql_set_level(unsigned severity);
 
 // Set maximum severity level to emit for count emissions
 int mql_set_level_counted(unsigned severity, unsigned count);
+
+// Get current log level.
+unsigned mql_get_level();
 
 
 // Help Functions
